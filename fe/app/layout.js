@@ -1,7 +1,7 @@
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import Navbar from '@/components/navbar';
-import { AuthProvider } from '@/lib/auth-context';
+import HideComponentAt from "@/lib/HideComponentAt";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -20,10 +20,10 @@ export default function RootLayout({ children }) {
       <body
         className={`${poppins.variable} font-sans antialiased`}
       >
-        <AuthProvider>
+        <HideComponentAt path={["/login","register"]}>
           <Navbar />
-          {children}
-        </AuthProvider>
+        </HideComponentAt>
+        {children}
       </body>
     </html>
   );

@@ -123,41 +123,61 @@ export default function CreateDonation() {
   const getCurrentLocation = () => {
     setLocationLoading(true);
     setLocationError("");
-
+  
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported by your browser");
       setLocationLoading(false);
       return;
     }
-
+  
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
+          console.log('Obtained coordinates:', latitude, longitude); // Debugging
           
-          // Reverse geocoding to get address from coordinates
+          // Reverse geocoding with proper user agent
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+            {
+              headers: {
+                'User-Agent': 'FoodDonationApp/1.0 (contact@example.com)'
+              }
+            }
           );
-          
+  
           if (!response.ok) {
-            throw new Error("Failed to get address from coordinates");
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
-          
+  
           const data = await response.json();
-          
-          // Format the address
-          const address = data.display_name || "Location found but address details unavailable";
-          
+          console.log('Geocoding response:', data); // Debugging
+  
+          // Construct address from individual components
+          const addr = data.address;
+          const addressComponents = [];
+          console.log(addr)
+          // Add relevant address parts in order of specificity
+          if (addr.road) addressComponents.push(addr.road);
+          if (addr.neighbourhood) addressComponents.push(addr.neighbourhood);
+          if (addr.suburb) addressComponents.push(addr.suburb);
+          if (addr.city_district) addressComponents.push(addr.city_district);
+          if (addr.postcode) addressComponents.push(addr.postcode);
+          if (addr.city) addressComponents.push(addr.city);
+          if (addr.state) addressComponents.push(addr.state);
+          if (addr.country) addressComponents.push(addr.country);
+  
+          const formattedAddress = addressComponents.join(', ') || data.display_name;
+  
           setFormData(prev => ({
             ...prev,
-            pickupAddress: address
+            pickupAddress: formattedAddress
           }));
-          
+  
           setLocationLoading(false);
         } catch (error) {
-          console.error("Error getting location:", error);
-          setLocationError("Failed to get address. Please enter manually.");
+          console.error("Geocoding error:", error);
+          setLocationError("Failed to get accurate address. Please enter manually.");
           setLocationLoading(false);
         }
       },
@@ -175,8 +195,12 @@ export default function CreateDonation() {
         
         setLocationError(errorMessage);
         setLocationLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      },  
+      { 
+        enableHighAccuracy: true,
+        timeout: 20000,  // Increased timeout
+        maximumAge: 0
+      }
     );
   };
 

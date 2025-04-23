@@ -136,9 +136,9 @@ const Navbar = () => {
             {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white text-base">
-                      {user?.name?.[0] || 'U'}
+                  <Button  className="relative h-10 w-10 rounded-full">
+                    <div className="flex  items-center justify-center rounded-full bg-primary text-white text-base">
+                      {userData?.name?.[0] || 'U'}
                     </div>
                   </Button>
                 </DropdownMenuTrigger>

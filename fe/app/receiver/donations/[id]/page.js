@@ -29,28 +29,37 @@ import {
   Calendar, 
   MapPin, 
   Clock, 
-  CheckCircle,
+  AlertTriangle, 
+  Edit, 
+  Trash2,
   ArrowLeft,
-  User
+  Send,
+  X
 } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
 
-export default function ReceiverDonationDetails() {
+export default function DonationDetails() {
   const params = useParams();
   const router = useRouter();
   const { id } = params;
-  const { user } = useAuth();
 
   const [donation, setDonation] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isClaiming, setIsClaiming] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  
+  // Request states
+  const [hasRequest, setHasRequest] = useState(false);
+  const [requestStatus, setRequestStatus] = useState(null);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [isCancellingRequest, setIsCancellingRequest] = useState(false);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [showRequestDialog, setShowRequestDialog] = useState(false);
 
   useEffect(() => {
     const fetchDonation = async () => {
       try {
-        // Get token from localStorage or from context
+        // Get token from localStorage
         const token = localStorage.getItem("token");
         if (!token) {
           router.push("/login");
@@ -69,6 +78,29 @@ export default function ReceiverDonationDetails() {
 
         if (response.data.success) {
           setDonation(response.data.data);
+          
+          // Check if user is a receiver
+          const user = JSON.parse(localStorage.getItem("user"));
+          if (user && user.role === "RECEIVER") {
+            // Check if user has already requested this donation
+            try {
+              const requestResponse = await axios.get(
+                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/donations/${id}/request`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              
+              if (requestResponse.data.success) {
+                setHasRequest(requestResponse.data.hasRequest);
+                setRequestStatus(requestResponse.data.requestStatus);
+              }
+            } catch (requestError) {
+              console.error("Error checking request status:", requestError);
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching donation:", error);
@@ -81,9 +113,9 @@ export default function ReceiverDonationDetails() {
     fetchDonation();
   }, [id, router]);
 
-  const handleClaim = async () => {
+  const handleCancel = async () => {
     try {
-      setIsClaiming(true);
+      setIsCancelling(true);
       
       // Get token from localStorage
       const token = localStorage.getItem("token");
@@ -92,10 +124,10 @@ export default function ReceiverDonationDetails() {
         return;
       }
 
-      // Claim donation
+      // Cancel donation
       const response = await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/donations/${id}/claim`,
-        {}, // Empty body as backend finds receiver from token
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/donations/${id}/cancel`,
+        {},
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -104,17 +136,89 @@ export default function ReceiverDonationDetails() {
       );
 
       if (response.data.success) {
-        // Update local state with the returned donation data
-        setDonation(response.data.data);
+        // Update local state
+        setDonation({
+          ...donation,
+          status: "CANCELLED"
+        });
       }
     } catch (error) {
-      console.error("Error claiming donation:", error);
-      setError(
-        error.response?.data?.message || 
-        "Failed to claim donation. Please try again later."
-      );
+      console.error("Error cancelling donation:", error);
+      setError("Failed to cancel donation. Please try again later.");
     } finally {
-      setIsClaiming(false);
+      setIsCancelling(false);
+    }
+  };
+  
+  const handleSendRequest = async () => {
+    try {
+      setIsRequesting(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      // Send request
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/donations/${id}/request`,
+        
+        { message: requestMessage },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        // Update local state
+        setHasRequest(true);
+        setRequestStatus("PENDING");
+        setShowRequestDialog(false);
+        setRequestMessage("");
+      }
+    } catch (error) {
+      console.error("Error sending request:", error);
+      setError("Failed to send request. Please try again later.");
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+  
+  const handleCancelRequest = async () => {
+    try {
+      setIsCancellingRequest(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      // Cancel request
+      const response = await axios.delete(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/donations/${id}/request`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        // Update local state
+        setHasRequest(false);
+        setRequestStatus(null);
+      }
+    } catch (error) {
+      console.error("Error cancelling request:", error);
+      setError("Failed to cancel request. Please try again later.");
+    } finally {
+      setIsCancellingRequest(false);
     }
   };
 
@@ -144,6 +248,32 @@ export default function ReceiverDonationDetails() {
         return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+  
+  // Get request status badge color and text
+  const getRequestStatusDisplay = (status) => {
+    switch (status) {
+      case "PENDING":
+        return {
+          color: "bg-yellow-100 text-yellow-800",
+          text: "Request Pending"
+        };
+      case "ACCEPTED":
+        return {
+          color: "bg-green-100 text-green-800",
+          text: "Request Accepted"
+        };
+      case "REJECTED":
+        return {
+          color: "bg-red-100 text-red-800",
+          text: "Request Rejected"
+        };
+      default:
+        return {
+          color: "bg-gray-100 text-gray-800",
+          text: "Unknown Status"
+        };
     }
   };
 
@@ -191,6 +321,11 @@ export default function ReceiverDonationDetails() {
       </div>
     );
   }
+  
+  // Determine if the user is a receiver (can request)
+  const user = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("user") || '{}') : {};
+  const isReceiver = user.role === "RECEIVER";
+  const canRequest = isReceiver && donation.status === "AVAILABLE" && !hasRequest;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -255,99 +390,128 @@ export default function ReceiverDonationDetails() {
               <div className="flex items-center">
                 <Clock className="mr-3 h-5 w-5 text-gray-500" />
                 <div>
-                  <div className="font-medium">Created At</div>
-                  <div>{formatDate(donation.createdAt)}</div>
+                  <div className="font-medium">Expiration Date</div>
+                  <div>{formatDate(donation.expirationDate)}</div>
                 </div>
               </div>
-
-              {donation.donor && (
-                <div className="flex items-start">
-                  <User className="mr-3 h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <div className="font-medium">Donor</div>
-                    <div>{donation.donor.name}</div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
-
-          {/* Claim Status */}
-          {donation.status === "CLAIMED" && donation.receiver && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-start">
-                <CheckCircle className="h-5 w-5 text-blue-500 mr-3 mt-1" />
-                <div>
-                  <h4 className="font-medium text-blue-800">Claimed by</h4>
-                  <p className="text-blue-700">
-                    {donation.receiverId === user?.id ? 'You' : donation.receiver.name}
-                  </p>
+          
+          {/* Request Status (if applicable) */}
+          {hasRequest && (
+            <div className="mt-4 p-4 rounded-lg border bg-gray-50">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <Badge className={`mr-2 ${getRequestStatusDisplay(requestStatus).color}`}>
+                    {getRequestStatusDisplay(requestStatus).text}
+                  </Badge>
+                  <span className="text-sm text-gray-600">
+                    {requestStatus === "PENDING" 
+                      ? "Your request is waiting for donor approval" 
+                      : requestStatus === "ACCEPTED"
+                      ? "Your request has been accepted by the donor"
+                      : "Your request has been rejected by the donor"}
+                  </span>
                 </div>
+                
+                {/* Cancel button (only for pending requests) */}
+                {requestStatus === "PENDING" && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={handleCancelRequest}
+                    disabled={isCancellingRequest}
+                  >
+                    {isCancellingRequest ? (
+                      <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                    ) : (
+                      <X className="h-4 w-4 mr-1" />
+                    )}
+                    Cancel Request
+                  </Button>
+                )}
               </div>
             </div>
           )}
         </CardContent>
 
-        <CardFooter className="flex flex-col sm:flex-row justify-end gap-3 pt-6">
-          {/* Claim button - only show if donation is AVAILABLE */}
-          {donation.status === "AVAILABLE" && (
-            <AlertDialog>
+        <CardFooter className="flex justify-center border-t pt-4">
+          {/* Show request button only if user is a receiver and donation is available */}
+          {canRequest && (
+            <AlertDialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
               <AlertDialogTrigger asChild>
-                <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90">
-                  <CheckCircle className="mr-2 h-5 w-5" />
-                  Claim Donation
-                </Button>
+                <Button className="w-64">Request Donation</Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Confirm Claim</AlertDialogTitle>
+                  <AlertDialogTitle>Request Donation</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to claim this donation? By claiming, you are committing to
-                    pick up and distribute the items as described.
+                    Send a request to the donor. They will be able to see your profile information when deciding.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                
+                <div className="py-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Message to Donor (Optional)
+                  </label>
+                  <Textarea
+                    placeholder="Tell the donor why you need this donation or any special pickup arrangements..."
+                    value={requestMessage}
+                    onChange={(e) => setRequestMessage(e.target.value)}
+                    className="w-full"
+                    rows={4}
+                  />
+                </div>
+                
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={handleClaim} 
-                    disabled={isClaiming} 
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    {isClaiming ? 'Processing...' : 'Confirm Claim'}
+                  <AlertDialogAction asChild>
+                    <Button 
+                      onClick={handleSendRequest}
+                      disabled={isRequesting}
+                    >
+                      {isRequesting ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      ) : (
+                        <Send className="h-4 w-4 mr-2" />
+                      )}
+                      Send Request
+                    </Button>
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
-
-          {/* Information for non-available donations */}
-          {donation.status !== "AVAILABLE" && donation.status !== "CLAIMED" && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="text-sm text-gray-500 italic">
-                    This donation is no longer available for claiming.
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Donations with status {donation.status} cannot be claimed.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          
+          {/* If request is already pending */}
+          {hasRequest && requestStatus === "PENDING" && (
+            <Button disabled className="w-64 bg-yellow-500 hover:bg-yellow-600">
+              Request Pending
+            </Button>
           )}
-
-          {/* Show additional info if already claimed by someone else */}
-          {donation.status === "CLAIMED" && donation.receiverId !== user?.id && (
-            <div className="text-sm text-gray-500 italic">
-              This donation has already been claimed by {donation.receiver?.name || 'another organization'}.
-            </div>
+          
+          {/* If request is accepted */}
+          {hasRequest && requestStatus === "ACCEPTED" && (
+            <Button disabled className="w-64 bg-green-500 hover:bg-green-600">
+              Request Accepted
+            </Button>
           )}
-
-          {/* Show info if already claimed by current user */}
-          {donation.status === "CLAIMED" && donation.receiverId === user?.id && (
-            <div className="text-sm text-primary font-medium">
-              You have successfully claimed this donation. Please contact the donor to arrange pickup.
-            </div>
+          
+          {/* If request is rejected */}
+          {hasRequest && requestStatus === "REJECTED" && (
+            <Button disabled className="w-64 bg-red-500 hover:bg-red-600">
+              Request Rejected
+            </Button>
+          )}
+          
+          {/* If user is not a receiver or donation is not available */}
+          {(!isReceiver || donation.status !== "AVAILABLE") && !hasRequest && (
+            <Button disabled className="w-64 opacity-60">
+              {!isReceiver 
+                ? "Only receivers can request donations" 
+                : `Donation is ${donation.status.toLowerCase()}`}
+            </Button>
           )}
         </CardFooter>
       </Card>

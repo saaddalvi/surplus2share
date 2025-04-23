@@ -1,70 +1,113 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgresql://neondb_owner:npg_yJnHv2Gm1ozg@ep-fragrant-firefly-a1ghsf3f-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String    @id @default(uuid())
+  email     String    @unique
   password  String
   name      String
-  role      Role     @default(DONOR)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      Role      @default(DONOR)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
   donor     Donor?
   receiver  Receiver?
+  
+  // Adding received notifications
+  notifications Notification[] @relation("UserNotifications")
 }
 
 model Donor {
-  id        String     @id @default(uuid())
-  userId    String     @unique
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  phone     String?
-  address   String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  donations Donation[]
+  id         String     @id @default(uuid())
+  userId     String     @unique
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone      String?
+  address    String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  donations  Donation[]
 }
 
 model Receiver {
-  id           String         @id @default(uuid())
-  userId       String         @unique
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  phone        String?
-  address      String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  donations    Donation[]     @relation("ClaimedDonations")
+  id         String         @id @default(uuid())
+  userId     String         @unique
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone      String?
+  address    String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  // Donations this receiver has claimed
+  donations  Donation[]     @relation("ClaimedDonations")
+
+  // Requests this receiver has sent
+  requests   DonationRequest[]
 }
 
 model Donation {
-  id            String         @id @default(uuid())
-  title         String
-  description   String?
-  foodType      String
-  quantity      Int
-  quantityUnit  String         @default("kg")
-  pickupAddress String
-  pickupDate    DateTime
+  id             String          @id @default(uuid())
+  title          String
+  description    String?
+  foodType       String
+  quantity       Int
+  quantityUnit   String          @default("kg")
+  pickupAddress  String
+  pickupDate     DateTime
   expirationDate DateTime?
-  status        DonationStatus @default(AVAILABLE)
-  donorId       String
-  donor         Donor          @relation(fields: [donorId], references: [id], onDelete: Cascade)
-  receiverId    String?
-  receiver      Receiver?      @relation("ClaimedDonations", fields: [receiverId], references: [id])
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  claimedAt     DateTime?      // When the donation was claimed
+  status         DonationStatus  @default(AVAILABLE)
+
+  donorId        String
+  donor          Donor           @relation(fields: [donorId], references: [id], onDelete: Cascade)
+
+  receiverId     String?
+  receiver       Receiver?       @relation("ClaimedDonations", fields: [receiverId], references: [id])
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // All incoming requests for this donation
+  requests       DonationRequest[]
+}
+
+model DonationRequest {
+  id          String        @id @default(uuid())
+  donationId  String
+  donation    Donation      @relation(fields: [donationId], references: [id], onDelete: Cascade)
+  receiverId  String
+  receiver    Receiver      @relation(fields: [receiverId], references: [id], onDelete: Cascade)
+
+  status      RequestStatus @default(PENDING)
+  message     String?       // Optional message from receiver to donor explaining request
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Related notifications
+  notifications Notification[] @relation("RequestNotifications")
+}
+
+// New model for tracking notifications
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           // User receiving the notification
+  user        User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  message     String
+  type        NotificationType
+  isRead      Boolean          @default(false)
+  
+  // Optional relation to a request if this notification is about a request
+  requestId   String?
+  request     DonationRequest? @relation("RequestNotifications", fields: [requestId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime         @default(now())
 }
 
 enum Role {
@@ -77,4 +120,18 @@ enum DonationStatus {
   CLAIMED
   COMPLETED
   CANCELLED
+}
+
+enum RequestStatus {
+  PENDING    // Receiver has sent request
+  ACCEPTED   // Donor has accepted the request
+  REJECTED   // Donor has rejected the request
+}
+
+enum NotificationType {
+  REQUEST_SENT       // Notification to donor when receiver sends request
+  REQUEST_ACCEPTED   // Notification to receiver when donor accepts request
+  REQUEST_REJECTED   // Notification to receiver when donor rejects request
+  DONATION_COMPLETED // Notification when donation is marked as completed
+  SYSTEM             // General system notifications
 }
