@@ -173,18 +173,19 @@ notifications.map((notification) => (
         </div>
       </CardHeader>
       
-      {/* Add this section for message display */}
       <CardContent className="pt-0">
-      {notification.type === "REQUEST_SENT" && notification.request?.status === "" && (
-            <div className="flex flex-col">
-                <span className="text-sm">{notification.message}</span>
-                <span className="text-sm">{notification.request?.message}</span>
+        <div className="flex flex-col space-y-2">
+          <span className="text-sm">{notification.message}</span>
+          {notification.type === "REQUEST_SENT" && notification.request?.message && (
+            <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-700">Message from receiver:</p>
+              <p className="text-sm text-gray-600 mt-1">{notification.request.message}</p>
             </div>
-        ) }
+          )}
+        </div>
         
         {notification.type === "REQUEST_SENT" && notification.request?.status === "PENDING" && (
           <div className="flex gap-2 justify-end mt-4">
-            {/* Keep existing action buttons */}
             <Button 
               variant="outline" 
               className="text-green-600 hover:bg-green-50"

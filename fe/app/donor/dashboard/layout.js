@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Bell, BarChart2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DonorLayout({ children }) {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function DonorLayout({ children }) {
         if (!token) {
           router.push("/login");
           return;
-}
+        }
 
         const userData = JSON.parse(localStorage.getItem("user"));
         setUser(userData);
@@ -55,21 +56,28 @@ export default function DonorLayout({ children }) {
             Welcome{user ? `, ${user.name}` : ""}! Manage your food donations here.
           </p>
         </div>
-       <div className="space-x-4">
-         <Link href="/donor/dashboard/requests">
-            <Button className="bg-primary hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" /> Requests
-            </Button>
-          </Link>
-          <Link href="/donor/create-donation">
-            <Button className="bg-primary hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" /> Create Donation
-            </Button>
-          </Link>
-       </div>
+        <div className="flex gap-4">
+          <Button asChild variant="outline">
+            <Link href="/donor/dashboard/requests">
+              <Bell className="mr-2 h-4 w-4" />
+              Requests
+            </Link>
+          </Button>
+          
+          <Button asChild>
+            <Link href="/donor/create-donation">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Donation
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      {children}
+      <Card>
+        <CardContent className="p-6">
+          {children}
+        </CardContent>
+      </Card>
     </div>
   );
 }

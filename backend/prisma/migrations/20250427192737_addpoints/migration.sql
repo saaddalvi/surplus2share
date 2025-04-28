@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Donor" ADD COLUMN     "points" INTEGER NOT NULL DEFAULT 0;

@@ -121,4 +121,95 @@ router.put('/profile', validate(updateProfileSchema), async (req, res) => {
   }
 });
 
+// Get receiver statistics
+router.get('/stats', async (req, res) => {
+  try {
+    const receiver = await prisma.receiver.findUnique({
+      where: { userId: req.user.id },
+      include: {
+        requests: {
+          include: {
+            donation: true
+          }
+        }
+      }
+    });
+
+    if (!receiver) {
+      return res.status(404).json({
+        success: false,
+        message: 'Receiver not found',
+      });
+    }
+
+    // Calculate statistics
+    const totalRequests = receiver.requests.length;
+    const acceptedRequests = receiver.requests.filter(r => r.status === 'ACCEPTED').length;
+    const completedRequests = receiver.requests.filter(r => r.donation.status === 'COMPLETED').length;
+    
+    // Calculate points (5 points per completed request)
+    const points = completedRequests * 5;
+
+    // Calculate monthly requests
+    const monthlyRequests = {};
+    receiver.requests.forEach(request => {
+      const month = new Date(request.createdAt).toLocaleString('default', { month: 'short' });
+      monthlyRequests[month] = (monthlyRequests[month] || 0) + 1;
+    });
+
+    // Calculate request categories
+    const requestCategories = {};
+    receiver.requests.forEach(request => {
+      if (request.donation.foodType) {
+        requestCategories[request.donation.foodType] = (requestCategories[request.donation.foodType] || 0) + 1;
+      }
+    });
+
+    // Calculate rank based on points
+    const allReceivers = await prisma.receiver.findMany({
+      include: {
+        requests: {
+          include: {
+            donation: true
+          }
+        }
+      }
+    });
+
+    const receiverRanks = allReceivers.map(r => ({
+      id: r.id,
+      points: r.requests.filter(req => req.donation.status === 'COMPLETED').length * 5
+    })).sort((a, b) => b.points - a.points);
+
+    const rank = receiverRanks.findIndex(r => r.id === receiver.id) + 1;
+
+    res.status(200).json({
+      success: true,
+      message: 'Receiver statistics retrieved successfully',
+      data: {
+        totalRequests,
+        acceptedRequests,
+        completedRequests,
+        points,
+        rank,
+        totalImpact: completedRequests, // Each completed request helps one NGO
+        monthlyRequests: Object.entries(monthlyRequests).map(([month, requests]) => ({
+          month,
+          requests
+        })),
+        requestCategories: Object.entries(requestCategories).map(([name, value]) => ({
+          name,
+          value
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Get receiver stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching receiver statistics',
+    });
+  }
+});
+
 module.exports = router;

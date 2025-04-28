@@ -822,6 +822,16 @@ router.patch('/requests/:requestId/respond', isDonor, async (req, res) => {
           }
         });
         
+        // Add 10 points to the donor
+        await prisma.donor.update({
+          where: { id: donor.id },
+          data: {
+            points: {
+              increment: 10
+            }
+          }
+        });
+        
         // Reject all other pending requests for this donation
         await prisma.donationRequest.updateMany({
           where: {

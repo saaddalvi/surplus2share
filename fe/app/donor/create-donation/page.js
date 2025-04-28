@@ -44,6 +44,14 @@ export default function CreateDonation() {
     pickupAddress: "",
     pickupDate: "",
     expirationDate: "",
+    societyName: "",
+    lane: "",
+    area: "",
+    locality: "",
+    city: "",
+    pincode: "",
+    latitude: "",
+    longitude: ""
   });
 
   const foodTypes = [
@@ -120,7 +128,212 @@ export default function CreateDonation() {
     }));
   };
 
-  const getCurrentLocation = () => {
+  // const getCurrentLocation = () => {
+  //   setLocationLoading(true);
+  //   setLocationError("");
+  
+  //   if (!navigator.geolocation) {
+  //     setLocationError("Geolocation is not supported by your browser");
+  //     setLocationLoading(false);
+  //     return;
+  //   }
+  
+  //   navigator.geolocation.getCurrentPosition(
+  //     async (position) => {
+  //       try {
+  //         const { latitude, longitude } = position.coords;
+  //         console.log('Obtained coordinates:', latitude, longitude); // Debugging
+          
+  //         // Reverse geocoding with proper user agent
+  //         const response = await fetch(
+  //           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+  //           {
+  //             headers: {
+  //               'User-Agent': 'FoodDonationApp/1.0 (contact@example.com)'
+  //             }
+  //           }
+  //         );
+  
+  //         if (!response.ok) {
+  //           throw new Error(`HTTP error! status: ${response.status}`);
+  //         }
+  
+  //         const data = await response.json();
+  //         console.log('Geocoding response:', data); // Debugging
+  
+  //         // Construct address from individual components
+  //         const addr = data.address;
+  //         const addressComponents = [];
+  //         console.log(addr)
+  //         // Add relevant address parts in order of specificity
+  //         if (addr.road) addressComponents.push(addr.road);
+  //         if (addr.neighbourhood) addressComponents.push(addr.neighbourhood);
+  //         if (addr.suburb) addressComponents.push(addr.suburb);
+  //         if (addr.city_district) addressComponents.push(addr.city_district);
+  //         if (addr.postcode) addressComponents.push(addr.postcode);
+  //         if (addr.city) addressComponents.push(addr.city);
+  //         if (addr.state) addressComponents.push(addr.state);
+  //         if (addr.country) addressComponents.push(addr.country);
+  
+  //         const formattedAddress = addressComponents.join(', ') || data.display_name;
+  
+  //         setFormData(prev => ({
+  //           ...prev,
+  //           pickupAddress: formattedAddress
+  //         }));
+  
+  //         setLocationLoading(false);
+  //       } catch (error) {
+  //         console.error("Geocoding error:", error);
+  //         setLocationError("Failed to get accurate address. Please enter manually.");
+  //         setLocationLoading(false);
+  //       }
+  //     },
+  //     (error) => {
+  //       console.error("Geolocation error:", error);
+  //       let errorMessage = "Failed to get your location.";
+        
+  //       if (error.code === 1) {
+  //         errorMessage = "Location access denied. Please allow location access or enter address manually.";
+  //       } else if (error.code === 2) {
+  //         errorMessage = "Location unavailable. Please try again or enter address manually.";
+  //       } else if (error.code === 3) {
+  //         errorMessage = "Location request timed out. Please try again or enter address manually.";
+  //       }
+        
+  //       setLocationError(errorMessage);
+  //       setLocationLoading(false);
+  //     },  
+  //     { 
+  //       enableHighAccuracy: true,
+  //       timeout: 20000,  // Increased timeout
+  //       maximumAge: 0
+  //     }
+  //   );
+  // };
+
+  async function getLocationInCommonFormat() {
+    setLocationLoading(true);
+    setLocationError("");
+  
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 20000
+        });
+      });
+  
+      const { latitude, longitude } = position.coords;
+  
+      // First try Mapbox
+      if (process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
+        try {
+          const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&types=poi,neighborhood,locality&limit=1`
+          );
+          
+          const data = await response.json();
+          
+          if (data.features?.length > 0) {
+            const feature = data.features[0];
+            let area = '';
+            let locality = '';
+            
+            // Extract Mumbai-specific locality names
+            if (feature.place_type.includes('poi')) {
+              locality = feature.text; // e.g., "Bandstand"
+            }
+            
+            // Get neighborhood (Bandra West)
+            const neighborhood = data.features.find(f => f.place_type.includes('neighborhood'));
+            if (neighborhood) {
+              area = neighborhood.text;
+            }
+  
+            // Fallback to context items
+            feature.context?.forEach(item => {
+              if (item.id.includes('neighborhood') && !area) {
+                area = item.text;
+              } else if (item.id.includes('locality') && !locality) {
+                locality = item.text;
+              }
+            });
+  
+            // For Mumbai, we want format: "Landmark, Area, Mumbai Pincode"
+            const mumbaiAddress = [
+              locality,
+              area,
+              'Mumbai',
+              feature.context?.find(c => c.id.includes('postcode'))?.text || ''
+            ].filter(Boolean).join(', ');
+  
+            setFormData(prev => ({
+              ...prev,
+              pickupAddress: mumbaiAddress,
+              locality: locality,
+              area: area,
+              pincode: feature.context?.find(c => c.id.includes('postcode'))?.text || ''
+            }));
+            
+            return;
+          }
+        } catch (e) {
+          console.log("Mapbox failed, trying OSM", e);
+        }
+      }
+  
+      // Fallback to OpenStreetMap with Mumbai-specific parsing
+      const osmResponse = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
+        { headers: { 'User-Agent': 'YourApp/1.0' } }
+      );
+  
+      const osmData = await osmResponse.json();
+      const addr = osmData.address;
+  
+      // Mumbai-specific formatting
+      let landmark = addr.building || addr.amenity || '';
+      let area = addr.suburb || '';
+      let locality = addr.road || addr.neighbourhood || '';
+      
+      // Special handling for Mumbai areas
+      if (addr.city_district) {
+        // For areas like "Bandra West"
+        if (addr.city_district.includes('Bandra')) {
+          area = 'Bandra West';
+          locality = landmark || 'Bandra';
+        }
+        // Similar handling for other areas
+        else if (addr.city_district.includes('Worli')) {
+          area = 'Worli';
+          locality = landmark || 'Worli';
+        }
+      }
+  
+      const mumbaiAddress = [
+        landmark,
+        area,
+        'Mumbai',
+        addr.postcode || ''
+      ].filter(Boolean).join(', ');
+  
+      setFormData(prev => ({
+        ...prev,
+        pickupAddress: mumbaiAddress,
+        locality: landmark,
+        area: area,
+        pincode: addr.postcode || ''
+      }));
+  
+    } catch (error) {
+      setLocationError("Couldn't get location. Please enter manually.");
+    } finally {
+      setLocationLoading(false);
+    }
+  }
+
+  async function getCurrentLocation() {
     setLocationLoading(true);
     setLocationError("");
   
@@ -130,79 +343,115 @@ export default function CreateDonation() {
       return;
     }
   
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          console.log('Obtained coordinates:', latitude, longitude); // Debugging
-          
-          // Reverse geocoding with proper user agent
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
-            {
-              headers: {
-                'User-Agent': 'FoodDonationApp/1.0 (contact@example.com)'
-              }
-            }
-          );
-  
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 0
           }
+        );
+      });
   
+      const { latitude, longitude } = position.coords;
+  
+      let addressComponents = {
+        society: '',
+        road: '',
+        neighborhood: '',
+        suburb: '',
+        city: '',
+        postcode: '',
+        country: ''
+      };
+  
+      // Try Mapbox API first
+      if (process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
+        try {
+          const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&types=address,poi,neighborhood,place,postcode&limit=1`
+          );
+          
           const data = await response.json();
-          console.log('Geocoding response:', data); // Debugging
+          if (data.features?.length > 0) {
+            const feature = data.features[0];
+            
+            // Extract components
+            feature.context?.forEach(item => {
+              const [type] = item.id.split('.');
+              if (type === 'neighborhood') addressComponents.neighborhood = item.text;
+              else if (type === 'postcode') addressComponents.postcode = item.text;
+              else if (type === 'place') addressComponents.city = item.text;
+              else if (type === 'country') addressComponents.country = item.text;
+            });
   
-          // Construct address from individual components
-          const addr = data.address;
-          const addressComponents = [];
-          console.log(addr)
-          // Add relevant address parts in order of specificity
-          if (addr.road) addressComponents.push(addr.road);
-          if (addr.neighbourhood) addressComponents.push(addr.neighbourhood);
-          if (addr.suburb) addressComponents.push(addr.suburb);
-          if (addr.city_district) addressComponents.push(addr.city_district);
-          if (addr.postcode) addressComponents.push(addr.postcode);
-          if (addr.city) addressComponents.push(addr.city);
-          if (addr.state) addressComponents.push(addr.state);
-          if (addr.country) addressComponents.push(addr.country);
-  
-          const formattedAddress = addressComponents.join(', ') || data.display_name;
-  
-          setFormData(prev => ({
-            ...prev,
-            pickupAddress: formattedAddress
-          }));
-  
-          setLocationLoading(false);
-        } catch (error) {
-          console.error("Geocoding error:", error);
-          setLocationError("Failed to get accurate address. Please enter manually.");
-          setLocationLoading(false);
+            addressComponents.road = feature.properties?.address || '';
+            addressComponents.society = feature.text || '';
+          }
+        } catch (e) {
+          console.log("Mapbox geocoding failed, falling back to OSM", e);
         }
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        let errorMessage = "Failed to get your location.";
-        
-        if (error.code === 1) {
-          errorMessage = "Location access denied. Please allow location access or enter address manually.";
-        } else if (error.code === 2) {
-          errorMessage = "Location unavailable. Please try again or enter address manually.";
-        } else if (error.code === 3) {
-          errorMessage = "Location request timed out. Please try again or enter address manually.";
-        }
-        
-        setLocationError(errorMessage);
-        setLocationLoading(false);
-      },  
-      { 
-        enableHighAccuracy: true,
-        timeout: 20000,  // Increased timeout
-        maximumAge: 0
       }
-    );
-  };
+  
+      // Fallback to OpenStreetMap
+      const osmResponse = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'FoodDonationApp/1.0 (contact@example.com)'
+          }
+        }
+      );
+  
+      if (osmResponse.ok) {
+        const osmData = await osmResponse.json();
+        const addr = osmData.address;
+  
+        // Prioritize these fields for cleaner output
+        addressComponents = {
+          society: addr.building || addr.hotel || addr.amenity || '',
+          road: addr.road || '',
+          neighborhood: addr.neighbourhood || addr.suburb || '',
+          suburb: addr.city_district || addr.residential || '',
+          city: addr.city || addr.town || addr.county || '',
+          postcode: addr.postcode || '',
+          country: addr.country || ''
+        };
+      }
+  
+      // Format as single line without labels
+      const formattedAddress = [
+        addressComponents.society,
+        addressComponents.road,
+        addressComponents.neighborhood,
+        addressComponents.suburb,
+        addressComponents.city,
+        addressComponents.postcode,
+        addressComponents.country
+      ].filter(Boolean).join(', ');
+  
+      setFormData(prev => ({
+        ...prev,
+        pickupAddress: formattedAddress,
+        latitude,
+        longitude
+      }));
+  
+    } catch (error) {
+      console.error("Location error:", error);
+      setLocationError(
+        error.code === 1 ? "Location access denied. Please enable permissions." :
+        error.code === 2 ? "Location unavailable. Check your network/GPS." :
+        error.code === 3 ? "Location request timed out. Try again." :
+        "Couldn't get location. Please enter manually."
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
