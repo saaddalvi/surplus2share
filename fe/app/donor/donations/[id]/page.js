@@ -32,7 +32,9 @@ import {
   AlertTriangle, 
   Edit, 
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  Phone,
+  User
 } from "lucide-react";
 
 export default function DonationDetails() {
@@ -260,6 +262,50 @@ export default function DonationDetails() {
             </div>
           </div>
 
+          {/* Receiver Information (when claimed) */}
+          {donation.status === "CLAIMED" && donation.receiver && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="text-lg font-medium mb-3 text-blue-800">Receiver Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-start">
+                  <User className="mr-3 h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <div className="font-medium">Organization</div>
+                    <div>{donation.receiver.user?.name}</div>
+                  </div>
+                </div>
+                
+                {donation.receiver.phone && (
+                  <div className="flex items-start">
+                    <Phone className="mr-3 h-5 w-5 text-blue-500 mt-0.5" />
+                    <div>
+                      <div className="font-medium">Contact Number</div>
+                      <div>{donation.receiver.phone}</div>
+                    </div>
+                  </div>
+                )}
+                
+                {donation.receiver.address && (
+                  <div className="flex items-start col-span-full">
+                    <MapPin className="mr-3 h-5 w-5 text-blue-500 mt-0.5" />
+                    <div>
+                      <div className="font-medium">Receiver Address</div>
+                      <div>{donation.receiver.address}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-start col-span-full">
+                  <Clock className="mr-3 h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <div className="font-medium">Claimed On</div>
+                    <div>{formatDate(donation.claimedAt)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Timestamps */}
           <div className="pt-2 text-sm text-gray-500 border-t">
             <p>Created: {formatDate(donation.createdAt)}</p>
@@ -311,7 +357,7 @@ export default function DonationDetails() {
 
           {donation.status === "CLAIMED" && (
             <div className="w-full p-3 bg-blue-50 text-blue-700 rounded-md">
-              This donation has been claimed by a receiver. Please coordinate the pickup.
+              This donation has been claimed by a receiver. Please use the contact information above to coordinate the pickup.
             </div>
           )}
 

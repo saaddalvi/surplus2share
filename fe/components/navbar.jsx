@@ -20,32 +20,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import Cookies from "js-cookie";
+import { useAuth } from "../lib/auth-context";
 
 const Navbar = () => {
   const router = useRouter();
-  const [userData, setUserData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Function to check authentication status
-  const checkAuth = () => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUserData(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        setUserData(null);
-      }
-    } else {
-      setUserData(null);
-    }
-    setIsLoading(false);
-  };
+  const { user, isAuthenticated, loading, logout, isReady } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
   
   useEffect(() => {
-    // Check if user is logged in on component mount
-    checkAuth();
+    setIsMounted(true);
   }, []);
   
   const navItems = [
@@ -55,20 +38,25 @@ const Navbar = () => {
   ];
 
   const handleSignOut = () => {
-    // Clear authentication data
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    Cookies.remove('token');
-    
-    // Update state immediately to reflect logged out status
-    setUserData(null);
-    
-    // Navigate to login page
+    logout();
     router.push('/login');
   };
 
-  const isAuthenticated = !!userData;
-
+  // Don't render auth-dependent UI until mounted
+  if (!isMounted || !isReady) {
+    return (
+      <nav className="sticky top-0 z-50 w-full border-b bg-background">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex-shrink-0">
+              <div className="font-bold text-xl text-primary">Surplus2Share</div>
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+  
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -119,7 +107,7 @@ const Navbar = () => {
                     </Link>
                   ))}
                   <div className="pt-4">
-                    {!isAuthenticated && !isLoading && (
+                    {!isAuthenticated && !loading && (
                       <div>
                         <Link href="/login" className="w-full">
                           <Button className="w-full py-2 text-base bg-primary hover:bg-primary/90">
@@ -150,16 +138,16 @@ const Navbar = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white text-base">
-                      {userData?.name?.[0] || 'U'}
+                      {user?.name?.[0] || 'U'}
                     </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-background border-border">
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none text-foreground">{userData?.name}</p>
+                      <p className="text-sm font-medium leading-none text-foreground">{user?.name}</p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        {userData?.email}
+                        {user?.email}
                       </p>
                     </div>
                   </DropdownMenuLabel>
@@ -187,7 +175,7 @@ const Navbar = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {!isAuthenticated && !isLoading && (
+            {!isAuthenticated && !loading && (
               <Link href="/login">
                 <Button className="px-6 py-2 text-base bg-primary hover:bg-primary/90">
                   Login

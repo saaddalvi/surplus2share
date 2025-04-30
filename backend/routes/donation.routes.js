@@ -342,7 +342,13 @@ router.get('/all/available', isReceiver, async (req, res) => {
 
     // Query all available donations
     const availableDonations = await prisma.donation.findMany({
-     
+      where: { 
+        status: 'AVAILABLE',
+        // Only show donations that haven't expired
+        expirationDate: {
+          gte: new Date()
+        }
+      },
       include: {
         donor: {
           include: {

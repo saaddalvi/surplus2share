@@ -64,6 +64,7 @@ model Donation {
   receiver      Receiver?      @relation("ClaimedDonations", fields: [receiverId], references: [id])
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  claimedAt     DateTime?      // When the donation was claimed
 }
 
 enum Role {

@@ -1,6 +1,7 @@
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import Navbar from '@/components/navbar';
+import { AuthProvider } from '@/lib/auth-context';
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -19,8 +20,10 @@ export default function RootLayout({ children }) {
       <body
         className={`${poppins.variable} font-sans antialiased`}
       >
-        <Navbar />
-        {children}
+        <AuthProvider>
+          <Navbar />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

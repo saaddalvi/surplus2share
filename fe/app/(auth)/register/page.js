@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import Cookies from 'js-cookie';
+import { useAuth } from "@/lib/auth-context";
 
 export default function Register() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -52,12 +53,8 @@ export default function Register() {
       const token = response.data.data.token;
       const user = response.data.data.user;
 
-      // Store token in both localStorage and cookies
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      
-      // Set cookie with 7-day expiry (matching the JWT expiry)
-      Cookies.set('token', token, { expires: 7, path: '/' });
+      // Use the auth context login method
+      login(user, token);
 
       // Redirect to dashboard based on role
       if (user.role === "DONOR") {
